@@ -1,0 +1,36 @@
+{
+  "model_name": "baseline-logistic-no_odds",
+  "model_version": "20260523_152849",
+  "odds_mode": "none",
+  "row_count": 3691,
+  "metrics": {
+    "win_log_loss": 0.2679073850399192,
+    "win_brier": 0.07230666471443041,
+    "win_auc": 0.6696317131401602,
+    "place_log_loss": 0.5176997810670455,
+    "place_brier": 0.1704021037894647,
+    "place_auc": 0.6778015589062101
+  },
+  "feature_columns": [
+    "recent_3_starts",
+    "recent_3_win_rate",
+    "recent_3_place_rate",
+    "recent_3_avg_finish",
+    "recent_5_starts",
+    "recent_5_win_rate",
+    "recent_5_place_rate",
+    "recent_5_avg_finish",
+    "days_since_last_run",
+    "draw",
+    "actual_weight_lbs",
+    "declared_horse_weight_lbs",
+    "jockey_win_rate",
+    "trainer_win_rate",
+    "distance_m",
+    "distance_starts",
+    "distance_win_rate",
+    "surface_starts",
+    "surface_win_rate"
+  ],
+  "artifact_path": "models\\baseline\\no_odds_20260523_152849.pkl"
+}

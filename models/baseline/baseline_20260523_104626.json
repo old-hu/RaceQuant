@@ -1,0 +1,36 @@
+{
+  "model_name": "baseline-logistic",
+  "model_version": "20260523_104626",
+  "row_count": 3547,
+  "metrics": {
+    "win_log_loss": 0.2369227071371407,
+    "win_brier": 0.06574655818922798,
+    "win_auc": 0.8026442359077403,
+    "place_log_loss": 0.4606404229575107,
+    "place_brier": 0.14916458501168214,
+    "place_auc": 0.7889389593367331
+  },
+  "feature_columns": [
+    "recent_3_starts",
+    "recent_3_win_rate",
+    "recent_3_place_rate",
+    "recent_3_avg_finish",
+    "recent_5_starts",
+    "recent_5_win_rate",
+    "recent_5_place_rate",
+    "recent_5_avg_finish",
+    "days_since_last_run",
+    "draw",
+    "actual_weight_lbs",
+    "declared_horse_weight_lbs",
+    "jockey_win_rate",
+    "trainer_win_rate",
+    "implied_win_probability",
+    "distance_m",
+    "distance_starts",
+    "distance_win_rate",
+    "surface_starts",
+    "surface_win_rate"
+  ],
+  "artifact_path": "models\\baseline\\baseline_20260523_104626.pkl"
+}

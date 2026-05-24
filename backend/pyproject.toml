@@ -1,0 +1,25 @@
+[project]
+name = "racequant-backend"
+version = "0.1.0"
+description = "Backend API and quantitative services for RaceQuant."
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.13.0",
+    "apscheduler>=3.10.0",
+    "beautifulsoup4>=4.12.0",
+    "fastapi>=0.110.0",
+    "httpx>=0.27.0",
+    "pandas>=2.2.0",
+    "pydantic-settings>=2.2.0",
+    "psycopg[binary]>=3.1.0",
+    "sqlalchemy>=2.0.0",
+    "uvicorn[standard]>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

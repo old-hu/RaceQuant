@@ -1,0 +1,3 @@
+Prepared 2 scrape scopes.
+Scheduler started. mode=daily-update interval=60 minutes
+Wrote data\reports\hkjc_scrape_run_20260523_091158.json

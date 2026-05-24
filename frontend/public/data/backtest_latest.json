@@ -1,0 +1,68 @@
+{
+  "config": {
+    "bet_type": "win",
+    "stake_strategy": "flat",
+    "initial_bankroll": 10000,
+    "flat_stake": 10.0,
+    "kelly_fraction": 0.25,
+    "max_stake_fraction": 0.02,
+    "min_probability": 0.0,
+    "min_edge": 0.01,
+    "top_n_per_race": 1,
+    "model_name": "baseline-logistic-pre_start_odds",
+    "model_version": "20260523_154711",
+    "race_date_from": null,
+    "race_date_to": null,
+    "racecourse": null
+  },
+  "metrics": {
+    "initialBankroll": 10000,
+    "finalBankroll": 9990.0,
+    "turnover": 10.0,
+    "profitLoss": -10.0,
+    "roi": -1.0,
+    "hitRate": 0.0,
+    "maxDrawdown": 0.001,
+    "profitFactor": 0.0,
+    "averageOdds": 30.0,
+    "betCount": 1
+  },
+  "bets": [
+    {
+      "sequence": 1,
+      "race_date": "2026-05-20",
+      "racecourse": "HV",
+      "race_no": 3,
+      "horse_code": "L062",
+      "horse_no": "11",
+      "horse_name": "STORMY KNIGHT",
+      "bet_type": "win",
+      "model_probability": 0.06022768484580445,
+      "market_probability": 0.03333333333333333,
+      "edge": 0.026894351512471118,
+      "stake": 10.0,
+      "decimal_odds": 30.0,
+      "payout": 0.0,
+      "profit_loss": -10.0,
+      "bankroll_after": 9990.0,
+      "is_hit": false
+    }
+  ],
+  "equityCurve": [
+    {
+      "sequence": 1,
+      "race_date": "2026-05-20",
+      "racecourse": "HV",
+      "race_no": 3,
+      "bankroll": 9990.0,
+      "drawdown": 0.001
+    }
+  ],
+  "assumptions": [
+    "每笔投注在赛前按模型输出下注，赛后使用 HKJC 派彩或赛果独赢赔率结算。",
+    "下注筛选和 Kelly 注码只使用模型输出中的 market probability，即下注时点可见赔率。",
+    "赛后结算使用 HKJC 派彩表；派彩金额按每 10 港元派彩折算为 decimal odds，payout 包含本金。",
+    "暂未计入交易成本、滑点、注额上限、赔率成交失败和盘口停牌。",
+    "同一场最多下注 top_n_per_race 个候选，按 edge 和模型概率排序。"
+  ]
+}
