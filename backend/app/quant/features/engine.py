@@ -45,6 +45,14 @@ class RunnerFeatureRow:
     surface_starts: int
     surface_win_rate: float | None
     class_change: str | None
+    official_form_starts: int
+    official_form_win_rate: float | None
+    official_form_place_rate: float | None
+    official_form_avg_finish: float | None
+    official_form_same_distance_starts: int
+    official_form_same_distance_win_rate: float | None
+    official_form_same_course_starts: int
+    official_form_same_course_win_rate: float | None
 
 
 class FeatureEngine:
@@ -137,6 +145,7 @@ class FeatureEngine:
         distance_stats = self._metadata_stats(con, row, "distance_m", metadata["distance_m"] if metadata else None)
         surface_stats = self._metadata_stats(con, row, "surface", metadata["surface"] if metadata else None)
         win_odds = self._win_odds(con, row)
+        official_form = self._official_horse_form(con, row, metadata)
 
         return RunnerFeatureRow(
             race_date=row["race_date"],
@@ -170,6 +179,14 @@ class FeatureEngine:
             surface_starts=surface_stats["starts"],
             surface_win_rate=surface_stats["win_rate"],
             class_change=self._class_change(con, row, metadata["race_class"] if metadata else None),
+            official_form_starts=official_form["starts"],
+            official_form_win_rate=official_form["win_rate"],
+            official_form_place_rate=official_form["place_rate"],
+            official_form_avg_finish=official_form["avg_finish"],
+            official_form_same_distance_starts=official_form["same_distance_starts"],
+            official_form_same_distance_win_rate=official_form["same_distance_win_rate"],
+            official_form_same_course_starts=official_form["same_course_starts"],
+            official_form_same_course_win_rate=official_form["same_course_win_rate"],
         )
 
     def _win_odds(self, con: sqlite3.Connection, row: sqlite3.Row) -> float | None:
@@ -291,6 +308,53 @@ class FeatureEngine:
             return "down"
         return "same"
 
+    def _official_horse_form(
+        self,
+        con: sqlite3.Connection,
+        row: sqlite3.Row,
+        metadata: sqlite3.Row | None,
+    ) -> dict[str, float | int | None]:
+        empty = {
+            "starts": 0,
+            "win_rate": None,
+            "place_rate": None,
+            "avg_finish": None,
+            "same_distance_starts": 0,
+            "same_distance_win_rate": None,
+            "same_course_starts": 0,
+            "same_course_win_rate": None,
+        }
+        if not table_exists(con, "horse_form_records"):
+            return empty
+        form_rows = con.execute(
+            """
+            SELECT *
+            FROM horse_form_records
+            WHERE horse_code = ?
+              AND race_date IS NOT NULL
+              AND race_date < ?
+            ORDER BY race_date DESC, CAST(race_index AS INTEGER) DESC
+            LIMIT 10
+            """,
+            (row["horse_code"], row["race_date"]),
+        ).fetchall()
+        if not form_rows:
+            return empty
+        distance_m = metadata["distance_m"] if metadata else None
+        course = normalize_course(row["racecourse"])
+        same_distance = [item for item in form_rows if distance_m is not None and item["distance_m"] == distance_m]
+        same_course = [item for item in form_rows if normalize_course(item["racecourse"]) == course]
+        return {
+            "starts": len(form_rows),
+            "win_rate": win_rate(form_rows),
+            "place_rate": place_rate(form_rows),
+            "avg_finish": avg_finish(form_rows),
+            "same_distance_starts": len(same_distance),
+            "same_distance_win_rate": win_rate(same_distance),
+            "same_course_starts": len(same_course),
+            "same_course_win_rate": win_rate(same_course),
+        }
+
 
 def win_rate(rows: list[sqlite3.Row]) -> float | None:
     if not rows:
@@ -350,6 +414,17 @@ def parse_class_number(value: str | None) -> int | None:
         return None
     match = re.search(r"Class\s+(\d+)", value, flags=re.IGNORECASE)
     return int(match.group(1)) if match else None
+
+
+def normalize_course(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().upper()
+    if text in {"HV", "HAPPY VALLEY"}:
+        return "HV"
+    if text in {"ST", "SHA TIN"}:
+        return "ST"
+    return text or None
 
 
 def table_exists(con: sqlite3.Connection, table_name: str) -> bool:

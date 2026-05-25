@@ -1,67 +1,110 @@
 # RaceQuant
 
-RaceQuant is a Hong Kong horse racing quantitative analysis system.
+RaceQuant is a Hong Kong horse-racing quantitative analysis system. Its current goal is to build a repeatable workflow for official historical race data, horse form history, model training, prediction review, value-betting research, and backtesting.
 
-The first product goal is to build a reproducible workflow for historical odds movement data, race data, probability modeling, value betting analysis, and backtesting.
+## Stack
 
-## Tech Stack
-
-- Backend: Python, FastAPI, SQLAlchemy, Alembic, PostgreSQL
-- Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui
-- Quant: pandas, numpy, scikit-learn, LightGBM or XGBoost
-- Testing: pytest for backend, frontend smoke tests later
-- Local orchestration: Docker Compose
+- Backend: Python, FastAPI, SQLAlchemy, Alembic
+- Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui-style components
+- Research data: local SQLite under `data/processed`
+- Raw cache: official HKJC scrape outputs under `data/raw/hkjc`
+- Local orchestration: PowerShell scripts, Makefile, Docker Compose
 
 ## Repository Layout
 
 ```text
 RaceQuant/
-├─ backend/
-├─ frontend/
-├─ data/
-├─ models/
-├─ scripts/
-├─ docs/
-├─ docker/
-├─ DESIGN.md
-├─ TASK_PLAN.md
-├─ README.md
-├─ .env.example
-└─ Makefile
+├── backend/      FastAPI app, DB models, quant services, tests
+├── frontend/     React app and static JSON data views
+├── data/         raw cache, processed SQLite DBs, reports, features
+├── models/       trained model artifacts
+├── scripts/      scraping, data build, audit, training, and local tools
+├── docs/         project notes and data/modeling references
+├── docker/       Dockerfiles
+├── DESIGN.md
+├── TASK_PLAN.md
+├── README.md
+└── Makefile
 ```
 
-## Current Execution Plan
+## Current Data Flow
 
-See `TASK_PLAN.md`.
+1. `scripts/discover_official_race_days.py` scans HKJC official result dates and seeds real race-day jobs.
+2. `scripts/run_historical_scrape_worker.py` backfills race cards, entries, results, dividends, changes, and missing horse-history pages.
+3. `scripts/build_local_data.py --source raw` rebuilds local research SQLite data from raw HKJC cache.
+4. `scripts/train_when_ready.py` waits until official scrape jobs are complete before rebuilding data, training the no-odds model, exporting predictions, and generating ranking reports.
 
-## Design Standard
-
-All frontend UI work should follow `DESIGN.md`.
-
-## Development Standard
-
-Architecture and quant rules are documented in `docs/development-guidelines.md`.
-
-## Project Documents
-
-- `TASK_PLAN.md`: current execution plan.
-- `DESIGN.md`: frontend visual and UI standard.
-- `docs/data_quality_report.md`: structured data audit result and training-data readiness.
-- `docs/modeling_pipeline.md`: baseline model training flow, odds-mode rules, metrics, and feature-query indexes.
-- `docs/scraping_plan.md`: HKJC public-data scraping scope and scheduler modes.
-- `docs/betting_rules.md`: value betting and backtesting assumptions.
+The complete historical odds library is intentionally separate and remains a later data task.
 
 ## Local Development
 
-Backend and frontend commands will be finalized as the skeleton is completed.
+Install frontend dependencies:
 
-Initial intended commands:
-
-```bash
-make dev-backend
-make dev-frontend
-make test-backend
-make lint-frontend
+```powershell
+cd frontend
+npm install
+cd ..
 ```
 
-The frontend currently uses `corepack pnpm` because pnpm is available through Corepack on this machine.
+Start backend and frontend on Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1
+```
+
+Rebuild local data before starting:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 -RebuildData
+```
+
+Default URLs:
+
+- Frontend: `http://127.0.0.1:5173/`
+- Backend: `http://127.0.0.1:8000/`
+- API docs: `http://127.0.0.1:8000/docs`
+
+## Common Commands
+
+```powershell
+python scripts/build_local_data.py --source auto --reset
+python scripts/train_when_ready.py --dry-run
+python scripts/audit_structured_data.py
+cd backend; python -m pytest; cd ..
+cd frontend; npm run lint; npm run build; npm run smoke; cd ..
+```
+
+If GNU Make is installed:
+
+```powershell
+make quality
+make train-when-ready
+make docker-up
+make docker-down
+```
+
+## Docker Compose
+
+Docker Compose starts PostgreSQL, backend, and the built frontend preview:
+
+```powershell
+docker compose up --build
+```
+
+Stop services:
+
+```powershell
+docker compose down
+```
+
+The backend container mounts `data/` and `models/` so local scrape/cache/model artifacts remain outside the image.
+
+## Key Documents
+
+- `TASK_PLAN.md`: current execution plan and remaining work.
+- `DESIGN.md`: frontend visual and UI standard.
+- `docs/data_pipeline.md`: repeatable local data build and audit workflow.
+- `docs/data_source_boundaries.md`: raw, SQLite, frontend cache, and formal DB boundaries.
+- `docs/modeling_pipeline.md`: baseline model training flow and odds-mode rules.
+- `docs/scraping_plan.md`: HKJC public-data scraping scope.
+- `docs/betting_rules.md`: value betting and backtesting assumptions.

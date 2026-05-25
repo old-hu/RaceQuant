@@ -12,9 +12,15 @@ STRUCTURED_DB = Path("data/processed/hkjc_structured.sqlite")
 RAW_DIR = Path("data/raw/hkjc")
 
 
+def set_raw_dir(raw_dir: Path) -> None:
+    global RAW_DIR
+    RAW_DIR = raw_dir
+
+
 def connect(db_path: Path = STRUCTURED_DB) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(db_path)
+    con = sqlite3.connect(db_path, timeout=60)
+    con.execute("PRAGMA busy_timeout = 60000")
     con.row_factory = sqlite3.Row
     init_schema(con)
     return con
@@ -259,7 +265,7 @@ def next_pending_job(db_path: Path = STRUCTURED_DB) -> sqlite3.Row | None:
     job = con.execute(
         """
         SELECT * FROM scrape_jobs
-        WHERE status IN ('pending', 'failed')
+        WHERE status = 'pending'
         ORDER BY race_date DESC, racecourse ASC
         LIMIT 1
         """
@@ -291,6 +297,22 @@ def mark_job(job_id: int, status: str, error: str | None = None, db_path: Path =
         )
     con.commit()
     con.close()
+
+
+def race_day_has_core_data(race_date: str, racecourse: str, db_path: Path = STRUCTURED_DB) -> bool:
+    con = connect(db_path)
+    try:
+        return all(
+            bool(
+                con.execute(
+                    f"SELECT 1 FROM {table} WHERE race_date = ? AND racecourse = ? LIMIT 1",
+                    (race_date, racecourse),
+                ).fetchone()
+            )
+            for table in ["race_metadata", "race_entries", "race_results", "dividends"]
+        )
+    finally:
+        con.close()
 
 
 def parse_job_outputs(race_date: str, racecourse: str, max_race_no: int = 12, db_path: Path = STRUCTURED_DB) -> dict[str, int]:
@@ -327,6 +349,40 @@ def parse_horse_history_outputs(db_path: Path = STRUCTURED_DB) -> dict[str, int]
     con.commit()
     con.close()
     return {"horse_profiles": profile_count, "horse_form_records": form_count}
+
+
+def discovered_horse_codes(db_path: Path = STRUCTURED_DB) -> list[str]:
+    con = connect(db_path)
+    rows = con.execute(
+        """
+        SELECT DISTINCT horse_code
+        FROM (
+            SELECT horse_code FROM race_entries
+            UNION ALL
+            SELECT horse_code FROM race_results
+        )
+        WHERE horse_code IS NOT NULL
+          AND TRIM(horse_code) != ''
+        ORDER BY horse_code
+        """
+    ).fetchall()
+    con.close()
+    return [str(row["horse_code"]).strip().upper() for row in rows if row["horse_code"]]
+
+
+def missing_horse_history_codes(
+    db_path: Path = STRUCTURED_DB,
+    raw_dir: Path | None = None,
+    limit: int | None = None,
+    include_existing: bool = False,
+) -> list[str]:
+    target_raw_dir = raw_dir or RAW_DIR
+    codes = discovered_horse_codes(db_path)
+    if not include_existing:
+        codes = [code for code in codes if not (target_raw_dir / "horse_history" / code / "latest.json").exists()]
+    if limit is not None and limit > 0:
+        return codes[:limit]
+    return codes
 
 
 def parse_change_outputs(db_path: Path = STRUCTURED_DB) -> dict[str, int]:

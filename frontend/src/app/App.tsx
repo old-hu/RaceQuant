@@ -151,6 +151,10 @@ type PredictionRow = {
   horseName: string;
   modelName: string;
   modelVersion: string;
+  trainingDatasetVersion?: string | null;
+  featureVersion?: string | null;
+  oddsMode?: string | null;
+  dataBuildId?: string | null;
   winProbability: number;
   placeProbability: number;
   fairWinOdds: number | null;
@@ -214,6 +218,16 @@ type BacktestReport = {
   equityCurve: BacktestEquityPoint[];
   assumptions: string[];
 };
+type BacktestFormState = {
+  betType: string;
+  stakeStrategy: string;
+  flatStake: string;
+  minEdge: string;
+  minProbability: string;
+  topN: string;
+  startDate: string;
+  endDate: string;
+};
 type OddsPoint = {
   legacyId: string;
   raceDate: string;
@@ -247,7 +261,7 @@ type OddsChangeReport = {
 const pageSize = 10;
 
 const fallbackSummary: ScrapeSummary = {
-  raceDays: [{ date: "2026-05-20", rows: 255666 }],
+  raceDays: [],
   sourceRows: [],
 };
 const fallbackBacktest: BacktestReport = {
@@ -287,6 +301,7 @@ export function App() {
   const [results, setResults] = useState<ResultRow[]>([]);
   const [dividends, setDividends] = useState<DividendRow[]>([]);
   const [predictions, setPredictions] = useState<PredictionRow[]>([]);
+  const [selectedModelKey, setSelectedModelKey] = useState("all");
   const [jobs, setJobs] = useState<ScrapeJob[]>([]);
   const [backtest, setBacktest] = useState<BacktestReport>(fallbackBacktest);
   const [oddsChanges, setOddsChanges] = useState<OddsChangeReport>(fallbackOddsChanges);
@@ -305,8 +320,10 @@ export function App() {
     loadJson<OddsChangeReport>("/data/odds_changes.json", fallbackOddsChanges).then(setOddsChanges);
   }, []);
 
-  const raceDays = summary.raceDays.length ? summary.raceDays : fallbackSummary.raceDays;
-  const latestDate = raceDays[0]?.date ?? "2026-05-20";
+  const raceDays = summary.raceDays;
+  const latestDate = raceDays[0]?.date ?? races[0]?.raceDate ?? "-";
+  const modelOptions = modelVersionOptions(predictions);
+  const visiblePredictions = selectedModelKey === "all" ? predictions : predictions.filter((row) => modelKey(row) === selectedModelKey);
 
   if (location.pathname === "/login") {
     return <LoginPage />;
@@ -378,14 +395,14 @@ export function App() {
                 latestDate={latestDate}
                 races={races}
                 results={results}
-                predictions={predictions}
+                predictions={visiblePredictions}
                 jobs={jobs}
               />
             }
           />
           <Route
             path="/race-days/:raceDate"
-            element={<RaceDayPage races={races} results={results} dividends={dividends} predictions={predictions} />}
+            element={<RaceDayPage races={races} results={results} dividends={dividends} predictions={visiblePredictions} />}
           />
           <Route path="/data" element={<Navigate replace to="/data/sources" />} />
           <Route
@@ -404,7 +421,17 @@ export function App() {
             }
           />
           <Route path="/odds" element={<OddsPage report={oddsChanges} />} />
-          <Route path="/model" element={<PredictionPage predictions={predictions} />} />
+          <Route
+            path="/model"
+            element={
+              <PredictionPage
+                modelOptions={modelOptions}
+                predictions={visiblePredictions}
+                selectedModelKey={selectedModelKey}
+                onModelChange={setSelectedModelKey}
+              />
+            }
+          />
           <Route path="/features" element={<FeaturePage />} />
           <Route path="/backtests" element={<BacktestPage report={backtest} />} />
           <Route path="/settings" element={<SettingsPage jobs={jobs} />} />
@@ -595,7 +622,7 @@ function DashboardPage({
           <Card className="bg-surface-card">
             <CardHeader className="flex flex-row items-start justify-between gap-4 p-6 pb-2">
               <div>
-                <CardTitle>{latestRaces.length > 0 ? "今日赛事" : `样例赛事 ${displayRaceDate}`}</CardTitle>
+                <CardTitle>{latestRaces.length > 0 ? "最新赛事" : `最近赛事 ${displayRaceDate}`}</CardTitle>
                 <p className="mt-1 text-sm text-charcoal">按场次快速扫描距离、班次、场地和赛事名称。</p>
               </div>
               <Trophy className="mt-1 size-5 shrink-0 text-accent-yellow" />
@@ -851,6 +878,16 @@ function DataPage({
     { label: "派彩", value: "dividends" },
     { label: "采集任务", value: "jobs" },
   ];
+  const discoveredHorseCodes = new Set(
+    [...entries.map((row) => row.horseCode), ...results.map((row) => row.horseCode)].filter(Boolean),
+  );
+  const coveredHorseCodes = new Set(horseHistory.map((row) => row.horseCode).filter(Boolean));
+  const horseHistoryCoverage =
+    discoveredHorseCodes.size > 0 ? Math.round((coveredHorseCodes.size / discoveredHorseCodes.size) * 100) : 0;
+  const statusCounts = jobStatusCounts(jobs);
+  const activeJobs = statusCounts.pending + statusCounts.running + statusCounts.failed;
+  const totalOfficialJobs = statusCounts.done + activeJobs;
+  const completionRate = totalOfficialJobs > 0 ? Math.round((statusCounts.done / totalOfficialJobs) * 100) : 0;
 
   return (
     <div className="min-h-screen">
@@ -881,6 +918,16 @@ function DataPage({
         </Button>
       </header>
       <div className="px-5 py-5">
+        <DataCompletenessPanel
+          activeCategory={current}
+          horseHistoryCoverage={horseHistoryCoverage}
+          discoveredHorseCount={discoveredHorseCodes.size}
+          coveredHorseCount={coveredHorseCodes.size}
+          activeJobs={activeJobs}
+          doneJobs={statusCounts.done}
+          skippedJobs={statusCounts.skipped}
+          completionRate={completionRate}
+        />
         {current === "sources" && <SourceTable rows={summary.sourceRows} page={page} onPageChange={setPage} />}
         {current === "races" && <RaceTable rows={races} page={page} onPageChange={setPage} />}
         {current === "entries" && <EntryTable rows={entries} page={page} onPageChange={setPage} />}
@@ -894,15 +941,63 @@ function DataPage({
   );
 }
 
-function PredictionPage({ predictions }: { predictions: PredictionRow[] }) {
+function PredictionPage({
+  predictions,
+  modelOptions,
+  selectedModelKey,
+  onModelChange,
+}: {
+  predictions: PredictionRow[];
+  modelOptions: Array<{ key: string; label: string }>;
+  selectedModelKey: string;
+  onModelChange: (key: string) => void;
+}) {
   const [page, setPage] = useState(1);
   const valueCount = predictions.filter((item) => item.isValueBet).length;
+  const meta = modelMetadata(predictions);
+  const probabilityRows = [...predictions]
+    .sort((left, right) => right.winProbability - left.winProbability)
+    .slice(0, 12);
+  const adviceRows = [...predictions]
+    .filter((item) => item.isValueBet || (item.edge ?? 0) > 0)
+    .sort((left, right) => (right.edge ?? -1) - (left.edge ?? -1))
+    .slice(0, 12);
   return (
     <PageShell title="预测看板" eyebrow="Model">
       <div className="grid gap-4 lg:grid-cols-3">
         <MetricCard title="预测记录" value={formatNumber(predictions.length)} note="当前 baseline 输出" />
         <MetricCard title="价值投注" value={String(valueCount)} note="edge >= 3%" />
         <MetricCard title="模型版本" value={predictions[0]?.modelVersion ?? "-"} note={predictions[0]?.modelName ?? "未生成"} />
+      </div>
+      <div className="mt-5 flex justify-end">
+        <ModelVersionMenu options={modelOptions} selectedKey={selectedModelKey} onSelect={onModelChange} />
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <StatusPill label="赔率模式" value={meta.oddsMode} />
+        <StatusPill label="训练数据" value={meta.trainingDatasetVersion} />
+        <StatusPill label="特征版本" value={meta.featureVersion} />
+        <StatusPill label="数据构建" value={meta.dataBuildId} />
+      </div>
+      {meta.isLeakageRisk && (
+        <div className="mt-5">
+          <RiskNotice />
+        </div>
+      )}
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <Card className="overflow-hidden">
+          <CardHeader className="p-6 pb-2">
+            <CardTitle>概率预测</CardTitle>
+            <p className="mt-1 text-sm text-charcoal">只展示模型胜率和位置概率，不包含下注资金建议。</p>
+          </CardHeader>
+          <ProbabilityPredictionTable rows={probabilityRows} />
+        </Card>
+        <Card className="overflow-hidden">
+          <CardHeader className="p-6 pb-2">
+            <CardTitle>下注建议</CardTitle>
+            <p className="mt-1 text-sm text-charcoal">按 edge 和候选状态筛选，保持预测与资金管理边界清晰。</p>
+          </CardHeader>
+          <BettingAdviceTable rows={adviceRows} />
+        </Card>
       </div>
       <div className="mt-5">
         <PredictionTable rows={predictions} page={page} onPageChange={setPage} />
@@ -928,7 +1023,7 @@ function OddsPage({ report }: { report: OddsChangeReport }) {
                 盘口移动，比结果更早说话。
               </h1>
               <p className="mt-5 max-w-[660px] text-lg leading-8 text-body">
-                展示已迁移旧库中的历史赔率变化。当前样例为 {report.raceDate || "-"} 第 {report.raceNo || "-"} 场 {report.oddsType.toUpperCase()}。
+                展示已迁移旧库中的历史赔率变化。完整历史赔率库已后置，当前可用范围为 {report.raceDate || "-"} 第 {report.raceNo || "-"} 场 {report.oddsType.toUpperCase()}。
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -989,6 +1084,13 @@ function FeaturePage() {
 
 function BacktestPage({ report }: { report: BacktestReport }) {
   const { metrics } = report;
+  const config = report.config;
+  const oddsMode = stringConfig(config, "odds_mode") || stringConfig(config, "oddsMode") || "-";
+  const isLeakageRisk = oddsMode === "result_final";
+  const [draftConfig, setDraftConfig] = useState(() => backtestFormFromConfig(config));
+  const updateDraftConfig = (field: keyof BacktestFormState, value: string) => {
+    setDraftConfig((current) => ({ ...current, [field]: value }));
+  };
   return (
     <div className="relative min-h-screen overflow-x-clip px-5 py-5">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[460px] bg-[radial-gradient(circle_at_48%_0%,rgba(255,89,0,0.22),transparent_62%)]" />
@@ -1011,6 +1113,8 @@ function BacktestPage({ report }: { report: BacktestReport }) {
                 <StatusPill label="注码策略" value={String(report.config.stake_strategy ?? "-")} />
                 <StatusPill label="单注" value={money(Number(report.config.flat_stake ?? 0))} />
                 <StatusPill label="候选数" value={String(report.config.top_n_per_race ?? "-")} />
+                <StatusPill label="赔率模式" value={oddsMode} />
+                <StatusPill label="回测版本" value={stringConfig(config, "backtest_version") || stringConfig(config, "backtestVersion") || "-"} />
               </div>
             </div>
           </div>
@@ -1025,6 +1129,7 @@ function BacktestPage({ report }: { report: BacktestReport }) {
 
         <section className="grid gap-5 pb-8 xl:grid-cols-[minmax(0,1.15fr)_420px]">
           <div className="space-y-5">
+            <BacktestParameterPanel config={draftConfig} onChange={updateDraftConfig} />
             <Card>
               <CardHeader className="p-6 pb-2">
                 <CardTitle>资金曲线</CardTitle>
@@ -1054,7 +1159,12 @@ function BacktestPage({ report }: { report: BacktestReport }) {
                   <StatusLine label="最终资金" value={money(metrics.finalBankroll)} />
                   <StatusLine label="总投注额" value={money(metrics.turnover)} />
                   <StatusLine label="盈亏因子" value={metrics.profitFactor == null ? "-" : number(metrics.profitFactor)} />
+                  <StatusLine label="模型版本" value={stringConfig(config, "model_version") || stringConfig(config, "modelVersion") || "-"} />
+                  <StatusLine label="训练数据" value={stringConfig(config, "training_dataset_version") || stringConfig(config, "trainingDatasetVersion") || "-"} />
+                  <StatusLine label="特征版本" value={stringConfig(config, "feature_version") || stringConfig(config, "featureVersion") || "-"} />
+                  <StatusLine label="数据构建" value={stringConfig(config, "data_build_id") || stringConfig(config, "dataBuildId") || "-"} />
                 </div>
+                {isLeakageRisk && <RiskNotice />}
               </CardContent>
             </Card>
 
@@ -1326,6 +1436,91 @@ function PredictionTable({ rows, page, onPageChange }: { rows: PredictionRow[]; 
   );
 }
 
+function DataCompletenessPanel({
+  activeCategory,
+  horseHistoryCoverage,
+  discoveredHorseCount,
+  coveredHorseCount,
+  activeJobs,
+  doneJobs,
+  skippedJobs,
+  completionRate,
+}: {
+  activeCategory: DataCategory;
+  horseHistoryCoverage: number;
+  discoveredHorseCount: number;
+  coveredHorseCount: number;
+  activeJobs: number;
+  doneJobs: number;
+  skippedJobs: number;
+  completionRate: number;
+}) {
+  const isHorseHistory = activeCategory === "horseHistory";
+  const isOddsDeferred = activeCategory === "sources";
+  return (
+    <div className="mb-4 grid gap-3 lg:grid-cols-4">
+      <StatusPill
+        label="马匹历史覆盖"
+        value={`${coveredHorseCount} / ${discoveredHorseCount || 0}`}
+        tone={isHorseHistory && horseHistoryCoverage < 95 ? "warning" : "default"}
+      />
+      <StatusPill label="官方回填进度" value={`${completionRate}% (${doneJobs} done)`} tone={activeJobs > 0 ? "warning" : "success"} />
+      <StatusPill label="待处理任务" value={activeJobs > 0 ? `${activeJobs} 个` : "已完成"} tone={activeJobs > 0 ? "warning" : "success"} />
+      <StatusPill label="非官方赛日" value={`${skippedJobs} skipped`} tone={skippedJobs > 0 ? "warning" : "default"} />
+      {isOddsDeferred && <StatusPill label="赔率完整库" value="后置开发" tone="warning" />}
+    </div>
+  );
+}
+
+function ProbabilityPredictionTable({ rows }: { rows: PredictionRow[] }) {
+  if (!rows.length) {
+    return <div className="px-6 py-5 text-sm text-charcoal">暂无概率预测记录。</div>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <TableHeader headers={["赛事", "马匹", "胜率", "位置概率", "模型版本"]} />
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`probability-${row.raceDate}-${row.racecourse}-${row.raceNo}-${row.horseCode}`} className="border-b border-hairline text-body last:border-0">
+              <td className="px-5 py-4">{row.racecourse} R{row.raceNo}</td>
+              <td className="px-5 py-4 text-ink">{row.horseNo}. {row.horseName}</td>
+              <td className="px-5 py-4 text-ink">{percent(row.winProbability)}</td>
+              <td className="px-5 py-4">{percent(row.placeProbability)}</td>
+              <td className="px-5 py-4 text-charcoal">{row.modelVersion}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BettingAdviceTable({ rows }: { rows: PredictionRow[] }) {
+  if (!rows.length) {
+    return <div className="px-6 py-5 text-sm text-charcoal">当前筛选条件下暂无下注候选。</div>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <TableHeader headers={["赛事", "马匹", "市场概率", "公允赔率", "Edge", "候选状态"]} />
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`advice-${row.raceDate}-${row.racecourse}-${row.raceNo}-${row.horseCode}`} className="border-b border-hairline text-body last:border-0">
+              <td className="px-5 py-4">{row.racecourse} R{row.raceNo}</td>
+              <td className="px-5 py-4 text-ink">{row.horseNo}. {row.horseName}</td>
+              <td className="px-5 py-4">{row.marketWinProbability == null ? "-" : percent(row.marketWinProbability)}</td>
+              <td className="px-5 py-4">{number(row.fairWinOdds)}</td>
+              <td className="px-5 py-4 text-ink">{row.edge == null ? "-" : percent(row.edge)}</td>
+              <td className="px-5 py-4"><CandidateBadge prediction={row} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function JobTable({ rows, page, onPageChange }: { rows: ScrapeJob[]; page: number; onPageChange: (page: number) => void }) {
   const data = paged(rows, page);
   return (
@@ -1412,9 +1607,15 @@ function DashboardMetric({ icon, title, value, note }: { icon: ReactNode; title:
   );
 }
 
-function StatusPill({ label, value }: { label: string; value: string }) {
+function StatusPill({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "success" | "warning" }) {
+  const toneClass =
+    tone === "success"
+      ? "border-accent-green/40 bg-accent-green/10"
+      : tone === "warning"
+        ? "border-accent-yellow/40 bg-accent-yellow/10"
+        : "border-hairline bg-surface-deep";
   return (
-    <div className="rounded-md border border-hairline bg-surface-deep px-3 py-2">
+    <div className={`rounded-md border px-3 py-2 ${toneClass}`}>
       <div className="text-xs text-ash">{label}</div>
       <div className="mt-1 text-sm font-medium text-ink">{value}</div>
     </div>
@@ -1485,7 +1686,7 @@ function RaceRunnerTable({ results, predictions }: { results: ResultRow[]; predi
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
-        <TableHeader headers={["马号", "马匹", "骑师", "练马师", "档位", "独赢", "胜率", "位置率", "Edge", "信号"]} />
+        <TableHeader headers={["马号", "马匹", "骑师", "练马师", "档位", "独赢", "模型胜率", "市场概率", "Edge", "公允赔率", "候选状态"]} />
         <tbody>
           {rows.map((row) => {
             const prediction = (row.horseCode ? predictionByHorseCode.get(row.horseCode) : undefined) ?? predictionByHorseNo.get(row.horseNo);
@@ -1498,9 +1699,10 @@ function RaceRunnerTable({ results, predictions }: { results: ResultRow[]; predi
                 <td className="px-5 py-4">{row.draw}</td>
                 <td className="px-5 py-4">{row.winOdds}</td>
                 <td className="px-5 py-4">{prediction ? percent(prediction.winProbability) : "-"}</td>
-                <td className="px-5 py-4">{prediction ? percent(prediction.placeProbability) : "-"}</td>
+                <td className="px-5 py-4">{prediction?.marketWinProbability == null ? "-" : percent(prediction.marketWinProbability)}</td>
                 <td className="px-5 py-4 text-ink">{prediction?.edge == null ? "-" : percent(prediction.edge)}</td>
-                <td className="px-5 py-4">{prediction?.isValueBet ? <Badge>Value</Badge> : "-"}</td>
+                <td className="px-5 py-4">{prediction?.fairWinOdds == null ? "-" : number(prediction.fairWinOdds)}</td>
+                <td className="px-5 py-4">{prediction ? <CandidateBadge prediction={prediction} /> : "-"}</td>
               </tr>
             );
           })}
@@ -1757,6 +1959,134 @@ function StatusLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+function CandidateBadge({ prediction }: { prediction: PredictionRow }) {
+  if (prediction.isValueBet) {
+    return <Badge>下注候选</Badge>;
+  }
+  if ((prediction.edge ?? 0) > 0) {
+    return <span className="text-accent-blue">观察</span>;
+  }
+  return <span className="text-charcoal">过滤</span>;
+}
+
+function BacktestParameterPanel({
+  config,
+  onChange,
+}: {
+  config: BacktestFormState;
+  onChange: (field: keyof BacktestFormState, value: string) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader className="p-6 pb-2">
+        <CardTitle>回测参数</CardTitle>
+        <p className="mt-1 text-sm text-charcoal">配置投注类型、下注策略、边际阈值、概率阈值、候选数和日期范围。</p>
+      </CardHeader>
+      <CardContent className="grid gap-4 p-6 pt-3 md:grid-cols-2 xl:grid-cols-3">
+        <FormSelect label="投注类型" value={config.betType} options={["win", "place"]} onChange={(value) => onChange("betType", value)} />
+        <FormSelect label="下注策略" value={config.stakeStrategy} options={["flat", "kelly_fraction", "proportional"]} onChange={(value) => onChange("stakeStrategy", value)} />
+        <FormInput label="单注金额" type="number" value={config.flatStake} onChange={(value) => onChange("flatStake", value)} />
+        <FormInput label="Min edge" type="number" value={config.minEdge} onChange={(value) => onChange("minEdge", value)} />
+        <FormInput label="Min probability" type="number" value={config.minProbability} onChange={(value) => onChange("minProbability", value)} />
+        <FormInput label="Top N" type="number" value={config.topN} onChange={(value) => onChange("topN", value)} />
+        <FormInput label="开始日期" type="date" value={config.startDate} onChange={(value) => onChange("startDate", value)} />
+        <FormInput label="结束日期" type="date" value={config.endDate} onChange={(value) => onChange("endDate", value)} />
+        <div className="rounded-md border border-hairline bg-surface-deep p-3 text-sm leading-6 text-charcoal">
+          当前面板用于固化策略输入；重新运行回测时应把这些参数传给后端回测任务。
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FormInput({
+  label,
+  value,
+  type,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  type: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-2 block text-charcoal">{label}</span>
+      <input
+        className="h-10 w-full rounded-md border border-hairline-strong bg-surface-deep px-3 text-ink outline-none focus:border-ink"
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+function FormSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-2 block text-charcoal">{label}</span>
+      <select
+        className="h-10 w-full rounded-md border border-hairline-strong bg-surface-deep px-3 text-ink outline-none focus:border-ink"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ModelVersionMenu({
+  options,
+  selectedKey,
+  onSelect,
+}: {
+  options: Array<{ key: string; label: string }>;
+  selectedKey: string;
+  onSelect: (key: string) => void;
+}) {
+  const active = options.find((option) => option.key === selectedKey) ?? options[0];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost">
+          <SlidersHorizontal className="mr-2 size-4" />
+          {active?.label ?? "全部模型"}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {options.map((option) => (
+          <DropdownMenuItem key={option.key} onClick={() => onSelect(option.key)}>
+            {option.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function RiskNotice() {
+  return (
+    <div className="mt-4 rounded-md border border-accent-red/40 bg-accent-red/10 px-3 py-2 text-sm leading-6 text-accent-red">
+      result_final 使用赛后最终赔率，仅用于对照实验，不能作为实盘赛前信号。
+    </div>
+  );
+}
+
 function DataCard({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
     <Card className="overflow-hidden">
@@ -1891,6 +2221,71 @@ function groupCount(values: string[]) {
     acc[value] = (acc[value] ?? 0) + 1;
     return acc;
   }, {});
+}
+
+function stringConfig(config: Record<string, unknown>, key: string) {
+  const value = config[key];
+  return typeof value === "string" && value ? value : "";
+}
+
+function optionalStringConfig(config: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = config[key];
+    if (typeof value === "string" && value) return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function backtestFormFromConfig(config: Record<string, unknown>): BacktestFormState {
+  return {
+    betType: optionalStringConfig(config, "bet_type", "betType") || "win",
+    stakeStrategy: optionalStringConfig(config, "stake_strategy", "stakeStrategy") || "flat",
+    flatStake: optionalStringConfig(config, "flat_stake", "flatStake") || "10",
+    minEdge: optionalStringConfig(config, "min_edge", "minEdge") || "0.03",
+    minProbability: optionalStringConfig(config, "min_probability", "minProbability") || "0",
+    topN: optionalStringConfig(config, "top_n_per_race", "topNPerRace") || "1",
+    startDate: optionalStringConfig(config, "start_date", "startDate"),
+    endDate: optionalStringConfig(config, "end_date", "endDate"),
+  };
+}
+
+function modelMetadata(predictions: PredictionRow[]) {
+  const row = predictions[0];
+  const oddsMode = row?.oddsMode ?? "-";
+  return {
+    oddsMode,
+    trainingDatasetVersion: row?.trainingDatasetVersion ?? "-",
+    featureVersion: row?.featureVersion ?? "-",
+    dataBuildId: row?.dataBuildId ?? "-",
+    isLeakageRisk: oddsMode === "result_final",
+  };
+}
+
+function modelKey(row: PredictionRow) {
+  return [row.modelName, row.modelVersion, row.oddsMode ?? "none"].join("::");
+}
+
+function jobStatusCounts(jobs: ScrapeJob[]) {
+  return jobs.reduce(
+    (counts, job) => {
+      if (job.status === "done") counts.done += 1;
+      else if (job.status === "running") counts.running += 1;
+      else if (job.status === "failed") counts.failed += 1;
+      else if (job.status === "skipped_no_official_result") counts.skipped += 1;
+      else counts.pending += 1;
+      return counts;
+    },
+    { done: 0, pending: 0, running: 0, failed: 0, skipped: 0 },
+  );
+}
+
+function modelVersionOptions(predictions: PredictionRow[]) {
+  const options = new Map<string, string>();
+  for (const row of predictions) {
+    options.set(modelKey(row), `${row.modelName} / ${row.modelVersion} / ${row.oddsMode ?? "none"}`);
+  }
+  return [{ key: "all", label: "全部模型" }, ...Array.from(options, ([key, label]) => ({ key, label }))];
 }
 
 async function loadJson<T>(url: string, fallback: T): Promise<T> {

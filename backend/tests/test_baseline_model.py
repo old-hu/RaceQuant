@@ -9,13 +9,24 @@ def test_train_and_predict_baseline_model(tmp_path: Path) -> None:
     artifact_dir = tmp_path / "models"
     build_model_db(db_path)
 
-    result = train_baseline_models(db_path, artifact_dir=artifact_dir)
+    result = train_baseline_models(
+        db_path,
+        artifact_dir=artifact_dir,
+        training_dataset_version="dataset-v1",
+        feature_version="features-v1",
+        data_build_id="build-v1",
+    )
 
     assert result.row_count == 24
     assert Path(result.artifact_path).exists()
     artifact = load_artifact(Path(result.artifact_path))
     assert artifact["model_name"] == "baseline-logistic-no_odds"
+    assert artifact["training_dataset_version"] == "dataset-v1"
+    assert artifact["feature_version"] == "features-v1"
+    assert artifact["data_build_id"] == "build-v1"
     assert "implied_win_probability" not in artifact["feature_columns"]
+    predictions = predict_with_artifact(artifact, [])
+    assert predictions == []
 
 
 def build_model_db(path: Path) -> None:

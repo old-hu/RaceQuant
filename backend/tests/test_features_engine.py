@@ -32,6 +32,13 @@ def test_runner_features_use_prior_history_only(tmp_path: Path) -> None:
     assert feature.class_change == "down"
     assert feature.jockey_win_rate == 1 / 3
     assert feature.trainer_win_rate == 1 / 3
+    assert feature.official_form_starts == 3
+    assert feature.official_form_win_rate == 1 / 3
+    assert feature.official_form_place_rate == 2 / 3
+    assert feature.official_form_same_distance_starts == 2
+    assert feature.official_form_same_distance_win_rate == 0.5
+    assert feature.official_form_same_course_starts == 1
+    assert feature.official_form_same_course_win_rate == 1.0
 
     no_odds_rows = FeatureEngine(db_path, odds_mode="none").build_runner_features(
         race_date="2026-05-20",
@@ -106,6 +113,33 @@ def build_feature_db(path: Path) -> None:
             odds REAL NOT NULL,
             snapshot_at TEXT
         );
+        CREATE TABLE horse_form_records (
+            horse_code TEXT NOT NULL,
+            race_index TEXT NOT NULL,
+            place TEXT,
+            race_date TEXT,
+            racecourse TEXT,
+            track TEXT,
+            course TEXT,
+            distance_m INTEGER,
+            going TEXT,
+            race_class TEXT,
+            draw TEXT,
+            rating TEXT,
+            trainer TEXT,
+            jockey TEXT,
+            lbw TEXT,
+            win_odds TEXT,
+            actual_weight TEXT,
+            running_position TEXT,
+            finish_time TEXT,
+            declared_horse_weight TEXT,
+            gear TEXT,
+            season TEXT,
+            source_path TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (horse_code, race_index)
+        );
         """
     )
     rows = [
@@ -151,6 +185,21 @@ def build_feature_db(path: Path) -> None:
             ("2026-05-03", "ST", 1, "Class 4", 1200, "GOOD", "PREV 1", "TURF", "B"),
             ("2026-04-15", "HV", 1, "Class 5", 1000, "GOOD", "PREV 2", "TURF", "A"),
             ("2026-04-01", "ST", 1, "Class 5", 1000, "GOOD", "PREV 3", "TURF", "C"),
+        ],
+    )
+    con.executemany(
+        """
+        INSERT INTO horse_form_records (
+            horse_code, race_index, place, race_date, racecourse, distance_m,
+            going, race_class, trainer, jockey, win_odds, actual_weight,
+            declared_horse_weight, source_path, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sample', '2026-05-23T00:00:00')
+        """,
+        [
+            ("K099", "1001", "3", "2026-05-03", "ST", 1200, "GOOD", "Class 4", "A Trainer", "A Jockey", "14", "128", "1178"),
+            ("K099", "1000", "1", "2026-04-15", "HV", 1000, "GOOD", "Class 5", "A Trainer", "A Jockey", "5.5", "128", "1178"),
+            ("K099", "999", "5", "2026-04-01", "ST", 1000, "GOOD", "Class 5", "A Trainer", "A Jockey", "8", "128", "1178"),
         ],
     )
     con.commit()

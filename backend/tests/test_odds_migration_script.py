@@ -4,6 +4,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from scripts.migrate_odds_history import migrate
+from scripts.migrate_legacy_horse_odds import implied_probability
 
 
 def test_migrate_odds_history_csv(tmp_path: Path) -> None:
@@ -28,4 +29,11 @@ def test_migrate_odds_history_csv(tmp_path: Path) -> None:
     assert report.duplicate_rows == 1
     assert report.error_rows == 1
     assert rows[0]["implied_probability"] == "0.200000"
+
+
+def test_legacy_odds_implied_probability() -> None:
+    assert implied_probability("5.0") == 0.2
+    assert implied_probability("3") == 0.333333
+    assert implied_probability("1.0") is None
+    assert implied_probability(None) is None
 

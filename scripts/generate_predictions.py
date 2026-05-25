@@ -21,9 +21,12 @@ def main() -> None:
     parser.add_argument("--odds-db", type=Path, default=Path("data/processed/legacy_horse_odds.sqlite"))
     parser.add_argument("--output", type=Path, default=Path("frontend/public/data/baseline_predictions.json"))
     parser.add_argument("--write-db", action="store_true")
+    parser.add_argument("--allow-result-final", action="store_true", help="Allow result_final odds mode for leakage/control experiments.")
     args = parser.parse_args()
 
     artifact = load_artifact(args.artifact)
+    if artifact.get("odds_mode") == "result_final" and not args.allow_result_final:
+        parser.error("The artifact uses result_final odds and requires --allow-result-final.")
     rows = FeatureEngine(
         args.db,
         odds_mode=artifact.get("odds_mode", "none"),

@@ -103,6 +103,33 @@ def build_report(db_path: Path) -> dict[str, Any]:
             ORDER BY status
             """,
         )
+        yearly_coverage = rows(
+            con,
+            """
+            SELECT
+                substr(rm.race_date, 1, 4) AS year,
+                COUNT(DISTINCT rm.race_date || ':' || rm.racecourse || ':' || rm.race_no) AS races,
+                COUNT(rr.horse_code) AS result_runners,
+                SUM(CASE WHEN rr.horse_code IS NULL OR rr.horse_code = '' THEN 1 ELSE 0 END) AS missing_horse_code,
+                SUM(CASE WHEN rr.draw IS NULL OR rr.draw = '' THEN 1 ELSE 0 END) AS missing_draw,
+                SUM(CASE WHEN rr.actual_weight IS NULL OR rr.actual_weight = '' THEN 1 ELSE 0 END) AS missing_actual_weight,
+                SUM(CASE WHEN rr.declared_horse_weight IS NULL OR rr.declared_horse_weight = '' THEN 1 ELSE 0 END) AS missing_declared_horse_weight
+            FROM race_metadata rm
+            LEFT JOIN race_results rr
+                ON rr.race_date = rm.race_date
+                AND rr.racecourse = rm.racecourse
+                AND rr.race_no = rm.race_no
+            GROUP BY year
+            ORDER BY year
+            """,
+        )
+        official_backfill = {
+            "official_race_days": scalar(con, "SELECT COUNT(*) FROM official_race_days") if table_exists(con, "official_race_days") else 0,
+            "official_scanned_dates": scalar(con, "SELECT COUNT(*) FROM official_race_day_scans") if table_exists(con, "official_race_day_scans") else 0,
+            "pending_jobs": scalar(con, "SELECT COUNT(*) FROM scrape_jobs WHERE status IN ('pending', 'running', 'failed')"),
+            "completed_jobs": scalar(con, "SELECT COUNT(*) FROM scrape_jobs WHERE status = 'done'"),
+            "skipped_jobs": scalar(con, "SELECT COUNT(*) FROM scrape_jobs WHERE status = 'skipped_no_official_result'"),
+        }
     finally:
         con.close()
 
@@ -132,6 +159,8 @@ def build_report(db_path: Path) -> dict[str, Any]:
             "duplicate_result_runners": len(duplicate_runners),
         },
         "scrape_jobs": job_status,
+        "official_backfill": official_backfill,
+        "yearly_coverage": yearly_coverage,
     }
 
 
@@ -151,6 +180,10 @@ def ratio(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator, 6) if denominator else None
 
 
+def table_exists(con: sqlite3.Connection, table_name: str) -> bool:
+    return con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table_name,)).fetchone() is not None
+
+
 def summary_for_console(report: dict[str, Any]) -> dict[str, Any]:
     return {
         "counts": report["counts"],
@@ -158,6 +191,7 @@ def summary_for_console(report: dict[str, Any]) -> dict[str, Any]:
         "coverage": report["coverage"],
         "issue_counts": report["issue_counts"],
         "critical_missing": report["critical_missing"],
+        "official_backfill": report["official_backfill"],
     }
 
 

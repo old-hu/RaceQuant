@@ -39,16 +39,30 @@ FEATURE_COLUMNS = [
     "distance_win_rate",
     "surface_starts",
     "surface_win_rate",
+    "official_form_starts",
+    "official_form_win_rate",
+    "official_form_place_rate",
+    "official_form_avg_finish",
+    "official_form_same_distance_starts",
+    "official_form_same_distance_win_rate",
+    "official_form_same_course_starts",
+    "official_form_same_course_win_rate",
 ]
 
 NO_ODDS_FEATURE_COLUMNS = [column for column in FEATURE_COLUMNS if column != "implied_win_probability"]
 ODDS_FEATURE_COLUMNS = FEATURE_COLUMNS
+FEATURE_VERSION = "runner_features_v2_horse_form"
+TRAINING_DATASET_VERSION = "baseline_training_v1"
 
 
 @dataclass(frozen=True)
 class TrainingResult:
     model_name: str
     model_version: str
+    training_dataset_version: str
+    feature_version: str
+    odds_mode: str
+    data_build_id: str | None
     row_count: int
     metrics: dict[str, float | None]
     artifact_path: str
@@ -61,6 +75,9 @@ def train_baseline_models(
     limit: int = 10000,
     odds_mode: str = "none",
     odds_db_path: Path | None = None,
+    training_dataset_version: str = TRAINING_DATASET_VERSION,
+    feature_version: str = FEATURE_VERSION,
+    data_build_id: str | None = None,
 ) -> TrainingResult:
     rows = FeatureEngine(db_path, odds_mode=odds_mode, odds_db_path=odds_db_path).build_runner_features(limit=limit)
     frame = build_training_frame(db_path, rows)
@@ -96,6 +113,9 @@ def train_baseline_models(
         "model_name": model_name,
         "model_version": model_version,
         "odds_mode": odds_mode,
+        "training_dataset_version": training_dataset_version,
+        "feature_version": feature_version,
+        "data_build_id": data_build_id,
         "feature_columns": feature_columns,
         "win_model": win_model,
         "place_model": place_model,
@@ -105,6 +125,9 @@ def train_baseline_models(
         "model_name": model_name,
         "model_version": model_version,
         "odds_mode": odds_mode,
+        "training_dataset_version": training_dataset_version,
+        "feature_version": feature_version,
+        "data_build_id": data_build_id,
         "row_count": len(frame),
         "metrics": metrics,
         "feature_columns": feature_columns,
@@ -114,6 +137,10 @@ def train_baseline_models(
     return TrainingResult(
         model_name=model_name,
         model_version=model_version,
+        training_dataset_version=training_dataset_version,
+        feature_version=feature_version,
+        odds_mode=odds_mode,
+        data_build_id=data_build_id,
         row_count=len(frame),
         metrics=metrics,
         artifact_path=str(artifact_path),
@@ -205,6 +232,10 @@ def predict_with_artifact(artifact: dict[str, Any], rows: list[RunnerFeatureRow]
                 "horseName": row["horse_name"],
                 "modelName": artifact["model_name"],
                 "modelVersion": artifact["model_version"],
+                "trainingDatasetVersion": artifact.get("training_dataset_version"),
+                "featureVersion": artifact.get("feature_version"),
+                "oddsMode": artifact.get("odds_mode", "none"),
+                "dataBuildId": artifact.get("data_build_id"),
                 "winProbability": win_probability,
                 "placeProbability": place_probability,
                 "fairWinOdds": fair_win_odds,

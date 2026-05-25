@@ -76,6 +76,28 @@ def init_schema(con: sqlite3.Connection) -> None:
             drawdown REAL NOT NULL,
             FOREIGN KEY (run_id) REFERENCES api_backtest_runs(id)
         );
+
+        CREATE TABLE IF NOT EXISTS api_backtest_candidate_explanations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL,
+            race_date TEXT NOT NULL,
+            racecourse TEXT NOT NULL,
+            race_no INTEGER NOT NULL,
+            horse_code TEXT NOT NULL,
+            horse_no TEXT NOT NULL,
+            horse_name TEXT NOT NULL,
+            bet_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            filter_reason TEXT,
+            model_probability REAL NOT NULL,
+            market_probability REAL,
+            fair_odds REAL,
+            entry_odds REAL,
+            edge REAL,
+            pool_size REAL,
+            feature_contributions_json TEXT NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES api_backtest_runs(id)
+        );
         """
     )
     ensure_columns(
@@ -141,6 +163,7 @@ def run_backtest(run_id: int, con: sqlite3.Connection | None = None) -> dict[str
         metrics = payload["metrics"]
         con.execute("DELETE FROM api_backtest_bets WHERE run_id = ?", (run_id,))
         con.execute("DELETE FROM api_backtest_equity WHERE run_id = ?", (run_id,))
+        con.execute("DELETE FROM api_backtest_candidate_explanations WHERE run_id = ?", (run_id,))
         con.executemany(
             """
             INSERT INTO api_backtest_bets (
@@ -192,6 +215,38 @@ def run_backtest(run_id: int, con: sqlite3.Connection | None = None) -> dict[str
                     point["drawdown"],
                 )
                 for point in payload["equityCurve"]
+            ],
+        )
+        con.executemany(
+            """
+            INSERT INTO api_backtest_candidate_explanations (
+                run_id, race_date, racecourse, race_no, horse_code, horse_no, horse_name,
+                bet_type, status, filter_reason, model_probability, market_probability,
+                fair_odds, entry_odds, edge, pool_size, feature_contributions_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    run_id,
+                    item["race_date"],
+                    item["racecourse"],
+                    item["race_no"],
+                    item["horse_code"],
+                    item["horse_no"],
+                    item["horse_name"],
+                    item["bet_type"],
+                    item["status"],
+                    item["filter_reason"],
+                    item["model_probability"],
+                    item["market_probability"],
+                    item["fair_odds"],
+                    item["entry_odds"],
+                    item["edge"],
+                    item["pool_size"],
+                    json.dumps(item["feature_contributions"], ensure_ascii=False, sort_keys=True),
+                )
+                for item in payload["candidateExplanations"]
             ],
         )
         con.execute(
@@ -281,7 +336,18 @@ def get_results(run_id: int) -> dict[str, Any] | None:
             normalize_equity(row)
             for row in con.execute("SELECT * FROM api_backtest_equity WHERE run_id = ? ORDER BY sequence", (run_id,)).fetchall()
         ]
-        return {"run": run, "bets": bets, "equityCurve": equity, "assumptions": run["assumptions"]}
+        candidates = [
+            normalize_candidate_explanation(row)
+            for row in con.execute(
+                """
+                SELECT * FROM api_backtest_candidate_explanations
+                WHERE run_id = ?
+                ORDER BY race_date, racecourse, race_no, horse_no
+                """,
+                (run_id,),
+            ).fetchall()
+        ]
+        return {"run": run, "bets": bets, "equityCurve": equity, "candidateExplanations": candidates, "assumptions": run["assumptions"]}
 
 
 def normalize_bet(row: sqlite3.Row) -> dict[str, Any]:
@@ -310,6 +376,25 @@ def normalize_equity(row: sqlite3.Row) -> dict[str, Any]:
     return payload
 
 
+def normalize_candidate_explanation(row: sqlite3.Row) -> dict[str, Any]:
+    payload = dict(row)
+    payload.pop("id", None)
+    payload.pop("run_id", None)
+    payload["raceNo"] = payload.pop("race_no")
+    payload["horseCode"] = payload.pop("horse_code")
+    payload["horseNo"] = payload.pop("horse_no")
+    payload["horseName"] = payload.pop("horse_name")
+    payload["betType"] = payload.pop("bet_type")
+    payload["filterReason"] = payload.pop("filter_reason")
+    payload["modelProbability"] = payload.pop("model_probability")
+    payload["marketProbability"] = payload.pop("market_probability")
+    payload["fairOdds"] = payload.pop("fair_odds")
+    payload["entryOdds"] = payload.pop("entry_odds")
+    payload["poolSize"] = payload.pop("pool_size")
+    payload["featureContributions"] = json.loads(payload.pop("feature_contributions_json") or "{}")
+    return payload
+
+
 def config_from_parameters(strategy_name: str, parameters: dict[str, Any]) -> BacktestConfig:
     merged = dict(parameters)
     normalized = strategy_name.lower().replace("_", "-")
@@ -331,9 +416,22 @@ def config_from_parameters(strategy_name: str, parameters: dict[str, Any]) -> Ba
         "maxStakeFraction": "max_stake_fraction",
         "minProbability": "min_probability",
         "minEdge": "min_edge",
+        "safetyMarginByBetType": "safety_margin_by_bet_type",
+        "minProbabilityByBetType": "min_probability_by_bet_type",
+        "minPoolSize": "min_pool_size",
+        "minPoolSizeByBetType": "min_pool_size_by_bet_type",
+        "minOddsByBetType": "min_odds_by_bet_type",
+        "maxOddsByBetType": "max_odds_by_bet_type",
+        "transactionCostRate": "transaction_cost_rate",
+        "slippageRate": "slippage_rate",
         "topNPerRace": "top_n_per_race",
         "modelName": "model_name",
         "modelVersion": "model_version",
+        "trainingDatasetVersion": "training_dataset_version",
+        "featureVersion": "feature_version",
+        "oddsMode": "odds_mode",
+        "dataBuildId": "data_build_id",
+        "backtestVersion": "backtest_version",
         "raceDateFrom": "race_date_from",
         "raceDateTo": "race_date_to",
     }
