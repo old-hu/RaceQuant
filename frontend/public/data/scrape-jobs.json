@@ -6356,20 +6356,20 @@
   {
     "raceDate": "2023-09-17",
     "racecourse": "ST",
-    "status": "pending",
-    "attempts": 0,
-    "startedAt": null,
-    "finishedAt": null,
-    "lastError": null
+    "status": "done_with_warnings",
+    "attempts": 1,
+    "startedAt": "2026-05-26T00:12:58+08:00",
+    "finishedAt": "2026-05-26T00:15:45+08:00",
+    "lastError": "C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_dividends.py --race-date 2023-09-17 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_race_meeting.py --race-date 2023-09-17 --racecourse ST --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_entries.py --race-date 2023-09-17 --racecourse ST --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_results.py --race-date 2023-09-17 --racecourse ST --race-no 2 --output-dir data\\raw\\hkjc: httpx.ConnectTimeout: _ssl.c:989: The handshake operation timed out; C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_results.py --race-date 2023-09-17 --racecourse ST --race-no 7 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_race_cards.py --race-date 2023-09-17 --racecourse ST --race-no 8 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_results.py --race-date 2023-09-17 --racecourse ST --race-no 8 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006)"
   },
   {
     "raceDate": "2023-09-13",
     "racecourse": "HV",
-    "status": "pending",
-    "attempts": 0,
-    "startedAt": null,
-    "finishedAt": null,
-    "lastError": null
+    "status": "done_with_warnings",
+    "attempts": 1,
+    "startedAt": "2026-05-26T00:15:58+08:00",
+    "finishedAt": "2026-05-26T00:18:38+08:00",
+    "lastError": "C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_results.py --race-date 2023-09-13 --racecourse HV --race-no 3 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_results.py --race-date 2023-09-13 --racecourse HV --race-no 7 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_race_cards.py --race-date 2023-09-13 --racecourse HV --race-no 8 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_results.py --race-date 2023-09-13 --racecourse HV --race-no 10 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006); C:\\Users\\admin\\anaconda3\\python.exe scripts/scrape_race_cards.py --race-date 2023-09-13 --racecourse HV --race-no 12 --output-dir data\\raw\\hkjc: httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1006)"
   },
   {
     "raceDate": "2023-09-10",
